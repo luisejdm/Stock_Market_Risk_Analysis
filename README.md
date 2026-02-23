@@ -1,22 +1,26 @@
 # Stock Market Risk Analysis — Project Report
 
 **Course:** Credit Models (Modelos de Crédito)
+
 **Date:** February 2026
+
+**Author:** Luis Jiménez
 
 ---
 
 ## Table of Contents
 
 1. [Introduction](#1-introduction)
-2. [Project Methodology](#2-project-methodology)
-3. [Data Sources and Retrieval](#3-data-sources-and-retrieval)
-4. [Model 1 — Altman Z-Score (Classic, Z)](#4-model-1--altman-z-score-classic-z)
-5. [Model 2 — Altman Z'-Score (Revised for Private Firms)](#5-model-2--altman-z-score-revised-for-private-firms)
-6. [Model 3 — Altman Z''-Score (Emerging Markets)](#6-model-3--altman-z-score-emerging-markets)
-7. [Model 4 — Merton Distance-to-Default Model](#7-model-4--merton-distance-to-default-model)
-8. [Combined Credit Decision Logic](#8-combined-credit-decision-logic)
-9. [Version of the Z-Score Formula Used and Justification](#9-version-of-the-z-score-formula-used-and-justification)
-10. [References](#10-references)
+2. [Getting Started](#2-getting-started)
+3. [Project Methodology](#3-project-methodology)
+4. [Data Sources and Retrieval](#4-data-sources-and-retrieval)
+5. [Model 1 — Altman Z-Score (Classic, Z)](#5-model-1--altman-z-score-classic-z)
+6. [Model 2 — Altman Z'-Score (Revised for Private Firms)](#6-model-2--altman-z-score-revised-for-private-firms)
+7. [Model 3 — Altman Z''-Score (Emerging Markets)](#7-model-3--altman-z-score-emerging-markets)
+8. [Model 4 — Merton Distance-to-Default Model](#8-model-4--merton-distance-to-default-model)
+9. [Combined Credit Decision Logic](#9-combined-credit-decision-logic)
+10. [Version of the Z-Score Formula Used and Justification](#10-version-of-the-z-score-formula-used-and-justification)
+11. [References](#11-references)
 
 ---
 
@@ -30,7 +34,93 @@ The system is delivered as a REST API (FastAPI backend) and an interactive dashb
 
 ---
 
-## 2. Project Methodology
+## 2. Getting Started
+
+### 2.1 Prerequisites
+
+- Python 3.9 or higher
+- All dependencies listed in `requirements.txt`
+
+Install all dependencies from the project root:
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2.2 Running the API (FastAPI Backend)
+
+The backend is built with **FastAPI** and must be started before the dashboard.
+
+1. Open a terminal and navigate to the `backend/` directory:
+
+```bash
+cd backend
+```
+
+2. Start the server with Uvicorn:
+
+```bash
+uvicorn main:app --reload
+```
+
+The API will be available at `http://localhost:8000`.
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/evaluate` | `POST` | Evaluate a company by ticker and firm type |
+| `/health` | `GET` | Health check — verifies the API is running |
+| `/docs` | `GET` | Interactive Swagger UI documentation |
+
+Example request body for `/evaluate`:
+
+```json
+{
+  "ticker": "AAPL",
+  "industry_type": 1
+}
+```
+
+`industry_type` values:
+- `1` → Public manufacturing firm (Classic Altman Z-Score)
+- `2` → Private or non-manufacturing firm (Revised Z'-Score)
+- `3` → Emerging market firm (Z''-Score)
+
+### 2.3 Running the Dashboard (Streamlit Frontend)
+
+The dashboard connects to the API running on `http://localhost:8000`. Make sure the backend is already running before launching the dashboard.
+
+1. Open a **second terminal** and navigate to the `frontend/` directory:
+
+```bash
+cd frontend
+```
+
+2. Launch the Streamlit app:
+
+```bash
+streamlit run dashboard.py
+```
+
+Streamlit will automatically open the dashboard in your default browser at `http://localhost:8501`.
+
+From the dashboard you can:
+- Enter any stock ticker (e.g., `AAPL`, `TSLA`, `AMZN`).
+- Select the firm type from the sidebar.
+- View the computed Altman Z-Score, Merton Distance-to-Default, individual ratio breakdown, and the final credit decision.
+
+### 2.4 Quick Start Summary
+
+```bash
+# Terminal 1 — Start the API
+cd backend && uvicorn main:app --reload
+
+# Terminal 2 — Start the dashboard
+cd frontend && streamlit run dashboard.py
+```
+
+---
+
+## 3. Project Methodology
 
 The analysis pipeline consists of four sequential stages:
 
@@ -47,7 +137,7 @@ The analysis pipeline consists of four sequential stages:
 
 ---
 
-## 3. Data Sources and Retrieval
+## 4. Data Sources and Retrieval
 
 ### 3.1 Financial Statements
 
@@ -87,7 +177,7 @@ Because Yahoo Finance data is sourced from public filings and may lag or differ 
 
 ---
 
-## 4. Model 1 — Altman Z-Score (Classic, Z)
+## 5. Model 1 — Altman Z-Score (Classic, Z)
 
 ### 4.1 Background
 
@@ -131,7 +221,7 @@ This model is designed for **publicly traded manufacturing firms** (Type 1). It 
 
 ---
 
-## 5. Model 2 — Altman Z'-Score (Revised for Private Firms)
+## 6. Model 2 — Altman Z'-Score (Revised for Private Firms)
 
 ### 5.1 Background
 
@@ -171,7 +261,7 @@ Designed for **private or non-manufacturing firms** (Type 2) where market equity
 
 ---
 
-## 6. Model 3 — Altman Z''-Score (Emerging Markets)
+## 7. Model 3 — Altman Z''-Score (Emerging Markets)
 
 ### 6.1 Background
 
@@ -209,7 +299,7 @@ Designed for **emerging market companies** (Type 3) where industry-specific asse
 
 ---
 
-## 7. Model 4 — Merton Distance-to-Default Model
+## 8. Model 4 — Merton Distance-to-Default Model
 
 ### 7.1 Background
 
@@ -253,7 +343,7 @@ where $\Phi$ is the standard normal CDF.
 
 ---
 
-## 8. Combined Credit Decision Logic
+## 9. Combined Credit Decision Logic
 
 Because accounting-based models (Altman) and market-based structural models (Merton) capture different dimensions of credit risk, neither alone is sufficient. The system combines both signals into a single credit recommendation using the following rule matrix:
 
@@ -270,7 +360,7 @@ The logic is conservative: **any distress signal from either model immediately r
 
 ---
 
-## 9. Version of the Z-Score Formula Used and Justification
+## 10. Version of the Z-Score Formula Used and Justification
 
 This project implements **three versions** of the Altman Z-Score, as described in Altman (2000) [1], and selects among them based on the declared firm type:
 
@@ -288,7 +378,7 @@ Altman (2000) explicitly states that the Classic Z-Score is valid only for publi
 
 ---
 
-## 10. References
+## 11. References
 
 [1] Altman, E. I. (2000). *Predicting Financial Distress of Companies: Revisiting the Z-Score and ZETA® Models*. Working Paper, Stern School of Business, New York University. (Adapted and updated from: Altman, E. I. (1968). Financial ratios, discriminant analysis and the prediction of corporate bankruptcy. *Journal of Finance*, September 1968; and Altman, E. I., Haldeman, R., & Narayanan, P. (1977). Zeta analysis: A new model to identify bankruptcy risk of corporations. *Journal of Banking & Finance*, 1.)
 

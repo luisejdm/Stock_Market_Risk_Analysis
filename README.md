@@ -11,16 +11,17 @@
 ## Table of Contents
 
 1. [Introduction](#1-introduction)
-2. [Getting Started](#2-getting-started)
-3. [Project Methodology](#3-project-methodology)
-4. [Data Sources and Retrieval](#4-data-sources-and-retrieval)
-5. [Model 1 — Altman Z-Score (Classic, Z)](#5-model-1--altman-z-score-classic-z)
-6. [Model 2 — Altman Z'-Score (Revised for Private Firms)](#6-model-2--altman-z-score-revised-for-private-firms)
-7. [Model 3 — Altman Z''-Score (Emerging Markets)](#7-model-3--altman-z-score-emerging-markets)
-8. [Model 4 — Merton Distance-to-Default Model](#8-model-4--merton-distance-to-default-model)
-9. [Combined Credit Decision Logic](#9-combined-credit-decision-logic)
-10. [Version of the Z-Score Formula Used and Justification](#10-version-of-the-z-score-formula-used-and-justification)
-11. [References](#11-references)
+2. [Project Architecture](#2-project-architecture)
+3. [Getting Started](#3-getting-started)
+4. [Project Methodology](#4-project-methodology)
+5. [Data Sources and Retrieval](#5-data-sources-and-retrieval)
+6. [Model 1 — Altman Z-Score (Classic, Z)](#6-model-1--altman-z-score-classic-z)
+7. [Model 2 — Altman Z'-Score (Revised for Private Firms)](#7-model-2--altman-z-score-revised-for-private-firms)
+8. [Model 3 — Altman Z''-Score (Emerging Markets)](#8-model-3--altman-z-score-emerging-markets)
+9. [Model 4 — Merton Distance-to-Default Model](#9-model-4--merton-distance-to-default-model)
+10. [Combined Credit Decision Logic](#10-combined-credit-decision-logic)
+11. [Version of the Z-Score Formula Used and Justification](#11-version-of-the-z-score-formula-used-and-justification)
+12. [References](#12-references)
 
 ---
 
@@ -34,7 +35,204 @@ The system is delivered as a REST API (FastAPI backend) and an interactive dashb
 
 ---
 
-## 2. Getting Started
+## 2. Project Architecture
+
+The diagram below shows the full object-oriented and functional programming structure of the project, spanning all layers from data retrieval to the REST API and the Streamlit frontend.
+
+```mermaid
+---
+title: Stock Market Risk Analysis — Architecture Diagram
+---
+classDiagram
+
+    class yfinance {
+        <<external>>
+        +Ticker(symbol)
+        +balance_sheet DataFrame
+        +income_stmt DataFrame
+        +history() DataFrame
+        +info dict
+    }
+
+    class Company {
+        <<data model>>
+        +str ticker
+        +int industry_type
+        -DataFrame _bs
+        -DataFrame _ist
+        -float _current_price
+        -int _shares_outstanding
+        +__init__(ticker, industry_type)
+        +total_assets() float
+        +working_capital() float
+        +retained_earnings() float
+        +total_liabilities() float
+        +current_liabilities() float
+        +book_equity() float
+        +market_equity() float
+        +ebit() float
+        +total_revenue() float
+        +x1() float
+        +x2() float
+        +x3() float
+        +x4() float
+        +x4_mod() float
+        +x5() float
+    }
+
+    class AltmanValuationModel {
+        <<abstract>>
+        +float SAFE_THRESHOLD
+        +float DISTRESS_THRESHOLD
+        +classify(z_score) str
+        +for_industry_type(industry_type)$ AltmanValuationModel
+        +evaluate(company) dict
+        +compute(company)* tuple
+    }
+
+    class AltmanClassic {
+        <<concrete>>
+        +SAFE_THRESHOLD = 2.99
+        +DISTRESS_THRESHOLD = 1.81
+        +compute(company) tuple
+    }
+
+    class AltmanPrime {
+        <<concrete>>
+        +SAFE_THRESHOLD = 2.6
+        +DISTRESS_THRESHOLD = 1.1
+        +compute(company) tuple
+    }
+
+    class AltmanEmergingMarkets {
+        <<concrete>>
+        +SAFE_THRESHOLD = 2.6
+        +DISTRESS_THRESHOLD = 1.1
+        +compute(company) tuple
+    }
+
+    class MertonModel {
+        <<model>>
+        -Company company
+        +__init__(company)
+        +evaluate() dict
+        -_classify_merton(prob) str
+    }
+
+    class ZScoreRequest {
+        <<schema · input>>
+        +str ticker
+        +int industry_type
+        +validate_industry_type()
+        +validate_ticker()
+    }
+
+    class RatiosDetail {
+        <<schema · nested>>
+        +float x1
+        +float x2
+        +float x3
+        +float x4
+        +float x5
+    }
+
+    class MertonDetail {
+        <<schema · nested>>
+        +float distance_to_default
+        +float default_probability
+        +str classification
+    }
+
+    class ZScoreResponse {
+        <<schema · output>>
+        +str ticker
+        +str model_name
+        +float z_score
+        +str classification
+        +RatiosDetail ratios
+        +MertonDetail merton
+        +str combined_decision
+    }
+
+    class ErrorResponse {
+        <<schema · error>>
+        +str ticker
+        +str error
+    }
+
+    class evaluate_company {
+        <<function>>
+        +ZScoreRequest request
+        +returns ZScoreResponse
+    }
+
+    class combined_decision {
+        <<pure function>>
+        +str altman_cls
+        +str merton_cls
+        +returns str
+    }
+
+    class FastAPI_App {
+        <<FastAPI>>
+        +POST /evaluate
+        +GET  /health
+    }
+
+    class build_spider_chart {
+        <<pure function>>
+        +dict ratios
+        +str ticker
+        +str color
+        +dict ratio_labels
+        +returns go.Figure
+    }
+
+    class StreamlitDashboard {
+        <<Streamlit>>
+        +sidebar: ticker input
+        +sidebar: industry type selector
+        +display: z_score card
+        +display: merton card
+        +display: ratios table
+        +display: credit decision
+        +display: spider chart
+    }
+
+    Company --> yfinance : fetches via
+
+    AltmanValuationModel <|-- AltmanClassic      : extends
+    AltmanValuationModel <|-- AltmanPrime         : extends
+    AltmanValuationModel <|-- AltmanEmergingMarkets : extends
+
+    AltmanValuationModel --> Company : uses
+    MertonModel --> Company          : uses
+
+    AltmanValuationModel ..> AltmanClassic         : creates (type 1)
+    AltmanValuationModel ..> AltmanPrime            : creates (type 2)
+    AltmanValuationModel ..> AltmanEmergingMarkets  : creates (type 3)
+
+    evaluate_company --> Company              : instantiates
+    evaluate_company --> AltmanValuationModel : calls factory + evaluate()
+    evaluate_company --> MertonModel          : instantiates + evaluate()
+    evaluate_company --> combined_decision    : calls
+    evaluate_company --> ZScoreRequest        : receives
+    evaluate_company --> ZScoreResponse       : returns
+    evaluate_company --> RatiosDetail         : assembles
+    evaluate_company --> MertonDetail         : assembles
+
+    FastAPI_App --> evaluate_company : delegates to
+    FastAPI_App --> ZScoreRequest    : validates input via
+    FastAPI_App --> ZScoreResponse   : serialises output via
+    FastAPI_App --> ErrorResponse    : returns on error
+
+    StreamlitDashboard --> FastAPI_App       : HTTP POST /evaluate
+    StreamlitDashboard --> build_spider_chart : calls
+```
+
+---
+
+## 3. Getting Started
 
 ### 2.1 Prerequisites
 
@@ -120,7 +318,7 @@ cd frontend && streamlit run dashboard.py
 
 ---
 
-## 3. Project Methodology
+## 4. Project Methodology
 
 The analysis pipeline consists of four sequential stages:
 
@@ -137,7 +335,7 @@ The analysis pipeline consists of four sequential stages:
 
 ---
 
-## 4. Data Sources and Retrieval
+## 5. Data Sources and Retrieval
 
 ### 3.1 Financial Statements
 
@@ -177,7 +375,7 @@ Because Yahoo Finance data is sourced from public filings and may lag or differ 
 
 ---
 
-## 5. Model 1 — Altman Z-Score (Classic, Z)
+## 6. Model 1 — Altman Z-Score (Classic, Z)
 
 ### 4.1 Background
 
@@ -221,7 +419,7 @@ This model is designed for **publicly traded manufacturing firms** (Type 1). It 
 
 ---
 
-## 6. Model 2 — Altman Z'-Score (Revised for Private Firms)
+## 7. Model 2 — Altman Z'-Score (Revised for Private Firms)
 
 ### 5.1 Background
 
@@ -261,7 +459,7 @@ Designed for **private or non-manufacturing firms** (Type 2) where market equity
 
 ---
 
-## 7. Model 3 — Altman Z''-Score (Emerging Markets)
+## 8. Model 3 — Altman Z''-Score (Emerging Markets)
 
 ### 6.1 Background
 
@@ -299,7 +497,7 @@ Designed for **emerging market companies** (Type 3) where industry-specific asse
 
 ---
 
-## 8. Model 4 — Merton Distance-to-Default Model
+## 9. Model 4 — Merton Distance-to-Default Model
 
 ### 7.1 Background
 
@@ -343,7 +541,7 @@ where $\Phi$ is the standard normal CDF.
 
 ---
 
-## 9. Combined Credit Decision Logic
+## 10. Combined Credit Decision Logic
 
 Because accounting-based models (Altman) and market-based structural models (Merton) capture different dimensions of credit risk, neither alone is sufficient. The system combines both signals into a single credit recommendation using the following rule matrix:
 
@@ -360,7 +558,7 @@ The logic is conservative: **any distress signal from either model immediately r
 
 ---
 
-## 10. Version of the Z-Score Formula Used and Justification
+## 11. Version of the Z-Score Formula Used and Justification
 
 This project implements **three versions** of the Altman Z-Score, as described in Altman (2000) [1], and selects among them based on the declared firm type:
 
@@ -378,7 +576,7 @@ Altman (2000) explicitly states that the Classic Z-Score is valid only for publi
 
 ---
 
-## 11. References
+## 12. References
 
 [1] Altman, E. I. (2000). *Predicting Financial Distress of Companies: Revisiting the Z-Score and ZETA® Models*. Working Paper, Stern School of Business, New York University. (Adapted and updated from: Altman, E. I. (1968). Financial ratios, discriminant analysis and the prediction of corporate bankruptcy. *Journal of Finance*, September 1968; and Altman, E. I., Haldeman, R., & Narayanan, P. (1977). Zeta analysis: A new model to identify bankruptcy risk of corporations. *Journal of Banking & Finance*, 1.)
 

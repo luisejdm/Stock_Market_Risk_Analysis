@@ -1,0 +1,226 @@
+---
+title: Stock Market Risk Analysis — Architecture Diagram
+---
+classDiagram
+
+    %% ─────────────────────────────────────────
+    %% LAYER 0 · External Dependencies
+    %% ─────────────────────────────────────────
+    class yfinance {
+        <<external>>
+        +Ticker(symbol)
+        +balance_sheet DataFrame
+        +income_stmt DataFrame
+        +history() DataFrame
+        +info dict
+    }
+
+    %% ─────────────────────────────────────────
+    %% LAYER 1 · Data Model  (backend/company.py)
+    %% ─────────────────────────────────────────
+    class Company {
+        <<data model>>
+        +str ticker
+        +int industry_type
+        -DataFrame _bs
+        -DataFrame _ist
+        -float _current_price
+        -int _shares_outstanding
+        +__init__(ticker, industry_type)
+        +total_assets() float
+        +working_capital() float
+        +retained_earnings() float
+        +total_liabilities() float
+        +current_liabilities() float
+        +book_equity() float
+        +market_equity() float
+        +ebit() float
+        +total_revenue() float
+        +x1() float
+        +x2() float
+        +x3() float
+        +x4() float
+        +x4_mod() float
+        +x5() float
+    }
+
+    %% ─────────────────────────────────────────
+    %% LAYER 2 · Altman Models  (backend/models.py)
+    %% ─────────────────────────────────────────
+    class AltmanValuationModel {
+        <<abstract>>
+        +float SAFE_THRESHOLD
+        +float DISTRESS_THRESHOLD
+        +classify(z_score) str
+        +for_industry_type(industry_type)$ AltmanValuationModel
+        +evaluate(company) dict
+        +compute(company)* tuple
+    }
+
+    class AltmanClassic {
+        <<concrete>>
+        +SAFE_THRESHOLD = 2.99
+        +DISTRESS_THRESHOLD = 1.81
+        +compute(company) tuple
+    }
+
+    class AltmanPrime {
+        <<concrete>>
+        +SAFE_THRESHOLD = 2.6
+        +DISTRESS_THRESHOLD = 1.1
+        +compute(company) tuple
+    }
+
+    class AltmanEmergingMarkets {
+        <<concrete>>
+        +SAFE_THRESHOLD = 2.6
+        +DISTRESS_THRESHOLD = 1.1
+        +compute(company) tuple
+    }
+
+    %% ─────────────────────────────────────────
+    %% LAYER 2 · Merton Model  (backend/models.py)
+    %% ─────────────────────────────────────────
+    class MertonModel {
+        <<model>>
+        -Company company
+        +__init__(company)
+        +evaluate() dict
+        -_classify_merton(prob) str
+    }
+
+    %% ─────────────────────────────────────────
+    %% LAYER 3 · Pydantic Schemas  (backend/schemas.py)
+    %% ─────────────────────────────────────────
+    class ZScoreRequest {
+        <<schema · input>>
+        +str ticker
+        +int industry_type
+        +validate_industry_type()
+        +validate_ticker()
+    }
+
+    class RatiosDetail {
+        <<schema · nested>>
+        +float x1
+        +float x2
+        +float x3
+        +float x4
+        +float x5
+    }
+
+    class MertonDetail {
+        <<schema · nested>>
+        +float distance_to_default
+        +float default_probability
+        +str classification
+    }
+
+    class ZScoreResponse {
+        <<schema · output>>
+        +str ticker
+        +str model_name
+        +float z_score
+        +str classification
+        +RatiosDetail ratios
+        +MertonDetail merton
+        +str combined_decision
+    }
+
+    class ErrorResponse {
+        <<schema · error>>
+        +str ticker
+        +str error
+    }
+
+    %% ─────────────────────────────────────────
+    %% LAYER 4 · Orchestration  (backend/evaluation.py)
+    %% ─────────────────────────────────────────
+    class evaluate_company {
+        <<function>>
+        +ZScoreRequest request
+        +returns ZScoreResponse
+    }
+
+    %% ─────────────────────────────────────────
+    %% LAYER 4 · Pure Functions  (backend/models.py)
+    %% ─────────────────────────────────────────
+    class combined_decision {
+        <<pure function>>
+        +str altman_cls
+        +str merton_cls
+        +returns str
+    }
+
+    %% ─────────────────────────────────────────
+    %% LAYER 5 · REST API  (backend/main.py)
+    %% ─────────────────────────────────────────
+    class FastAPI_App {
+        <<FastAPI>>
+        +POST /evaluate
+        +GET  /health
+    }
+
+    %% ─────────────────────────────────────────
+    %% LAYER 6 · Frontend  (frontend/)
+    %% ─────────────────────────────────────────
+    class build_spider_chart {
+        <<pure function>>
+        +dict ratios
+        +str ticker
+        +str color
+        +dict ratio_labels
+        +returns go.Figure
+    }
+
+    class StreamlitDashboard {
+        <<Streamlit>>
+        +sidebar: ticker input
+        +sidebar: industry type selector
+        +display: z_score card
+        +display: merton card
+        +display: ratios table
+        +display: credit decision
+        +display: spider chart
+    }
+
+    %% ─────────────────────────────────────────
+    %% RELATIONSHIPS
+    %% ─────────────────────────────────────────
+
+    %% Data retrieval
+    Company --> yfinance : fetches via
+
+    %% Altman inheritance hierarchy
+    AltmanValuationModel <|-- AltmanClassic      : extends
+    AltmanValuationModel <|-- AltmanPrime         : extends
+    AltmanValuationModel <|-- AltmanEmergingMarkets : extends
+
+    %% Models depend on Company for raw data
+    AltmanValuationModel --> Company : uses
+    MertonModel --> Company          : uses
+
+    %% Factory method selects concrete subclass
+    AltmanValuationModel ..> AltmanClassic         : creates (type 1)
+    AltmanValuationModel ..> AltmanPrime            : creates (type 2)
+    AltmanValuationModel ..> AltmanEmergingMarkets  : creates (type 3)
+
+    %% Orchestration pipeline
+    evaluate_company --> Company              : instantiates
+    evaluate_company --> AltmanValuationModel : calls factory + evaluate()
+    evaluate_company --> MertonModel          : instantiates + evaluate()
+    evaluate_company --> combined_decision    : calls
+    evaluate_company --> ZScoreRequest        : receives
+    evaluate_company --> ZScoreResponse       : returns
+    evaluate_company --> RatiosDetail         : assembles
+    evaluate_company --> MertonDetail         : assembles
+
+    %% API layer
+    FastAPI_App --> evaluate_company : delegates to
+    FastAPI_App --> ZScoreRequest    : validates input via
+    FastAPI_App --> ZScoreResponse   : serialises output via
+    FastAPI_App --> ErrorResponse    : returns on error
+
+    %% Frontend layer
+    StreamlitDashboard --> FastAPI_App       : HTTP POST /evaluate
+    StreamlitDashboard --> build_spider_chart : calls
